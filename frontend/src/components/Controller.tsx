@@ -26,10 +26,9 @@ const Controller = () => {
       .then(async (blob) => {
         // Construct audio to send file
         const formData = new FormData();
-        formData.append("file", blob, ".\\myFile.wav");
+        formData.append("file", blob, "myFile.wav");
 
         // send form data to api endpoint
-        console.log(formData);
         await axios
           .post("http://localhost:8000/post-audio", formData, {
             headers: {
@@ -37,14 +36,13 @@ const Controller = () => {
             },
             responseType: "arraybuffer", // Set the response type to handle binary data
           })
-
           .then((res: any) => {
             const blob = res.data;
             const audio = new Audio();
             audio.src = createBlobURL(blob);
 
             // Append to audio
-            const rachelMessage = { sender: "rachel", blobUrl: audio.src };
+            const rachelMessage = { sender: "Jotirmoy", blobUrl: audio.src };
             messagesArr.push(rachelMessage);
             setMessages(messagesArr);
 
@@ -107,7 +105,7 @@ const Controller = () => {
 
           {isLoading && (
             <div className="text-center font-light italic mt-10 animate-pulse">
-              Gimme a few seconds...
+              Give me a few seconds...
             </div>
           )}
         </div>

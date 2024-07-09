@@ -7,6 +7,13 @@ from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from decouple import config
 import openai
+import os
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 
 # Custom function imports
@@ -26,11 +33,10 @@ app = FastAPI()
 
 # CORS - Origins
 origins = [
-    "http://localhost:5173",
+    "http://localhost:5175",
     "http://localhost:5174",
-    "http://localhost:4173",
+    "http://localhost:5173",
     "http://localhost:3000",
-    "*"
 ]
 
 
@@ -61,40 +67,58 @@ async def reset_conversation():
 # Note: Not playing back in browser when using post request.
 @app.post("/post-audio/")
 async def post_audio(file: UploadFile = File(...)):
+    try:
+        logger.info("Received file: %s", file.filename)
 
-    # Convert audio to text - production
-    # Save the file temporarily
-    with open(file.filename, "wb") as buffer:
-        buffer.write(file.file.read())
-    audio_input = open(file.filename, "rb")
+        # Save the file temporarily
+        temp_file_path = file.filename
+        with open(temp_file_path, "wb") as buffer:
+            buffer.write(file.file.read())
+        logger.info("File saved: %s", temp_file_path)
 
-    # Decode audio
-    message_decoded = convert_audio_to_text(audio_input)
+        # Open the saved file for reading
+        with open(temp_file_path, "rb") as audio_input:
+            # Convert audio to text
+            message_decoded = convert_audio_to_text(audio_input)
+            logger.info("Decoded message: %s", message_decoded)
 
-    # Guard: Ensure output
-    if not message_decoded:
-        raise HTTPException(status_code=400, detail="Failed to decode audio")
+        # Clean up the temporary file
+        os.remove(temp_file_path)
+        logger.info("Temporary file deleted: %s", temp_file_path)
 
-    # Get chat response
-    chat_response = get_chat_response(message_decoded)
+        # Guard: Ensure output
+        if not message_decoded:
+            logger.error("Failed to decode audio")
+            raise HTTPException(status_code=400, detail="Failed to decode audio")
 
-    # Store messages
-    store_messages(message_decoded, chat_response)
+        # Get chat response
+        chat_response = get_chat_response(message_decoded)
+        logger.info("Chat response: %s", chat_response)
 
-    # Guard: Ensure output
-    if not chat_response:
-        raise HTTPException(status_code=400, detail="Failed chat response")
+        # Store messages
+        store_messages(message_decoded, chat_response)
 
-    # Convert chat response to audio
-    audio_output = convert_text_to_speech(chat_response)
+        # Guard: Ensure output
+        if not chat_response:
+            logger.error("Failed chat response")
+            raise HTTPException(status_code=400, detail="Failed chat response")
 
-    # Guard: Ensure output
-    if not audio_output:
-        raise HTTPException(status_code=400, detail="Failed audio output")
+        # Convert chat response to audio
+        audio_output = convert_text_to_speech(chat_response)
+        logger.info("Audio output generated")
 
-    # Create a generator that yields chunks of data
-    def iterfile():
-        yield audio_output
+        # Guard: Ensure output
+        if not audio_output:
+            logger.error("Failed audio output")
+            raise HTTPException(status_code=400, detail="Failed audio output")
 
-    # Use for Post: Return output audio
-    return StreamingResponse(iterfile(), media_type="application/octet-stream")
+        # Create a generator that yields chunks of data
+        def iterfile():
+            yield audio_output
+
+        # Use for Post: Return output audio
+        return StreamingResponse(iterfile(), media_type="application/octet-stream")
+
+    except Exception as e:
+        logger.exception("An error occurred: %s", str(e))
+        raise HTTPException(status_code=500, detail="Internal Server Error")
